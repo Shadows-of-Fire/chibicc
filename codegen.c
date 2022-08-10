@@ -501,7 +501,7 @@ static void push_args2(Node *args, bool first_pass) {
 //
 // - If a function is variadic, set the number of floating-point type
 //   arguments to RAX.
-static int push_args(Node *node) {
+static int push_args(Node *node, unsigned int* argsize) {
   int stack = 0, gp = 0, fp = 0;
 
   // If the return type is a large struct/union, the caller passes
@@ -512,6 +512,7 @@ static int push_args(Node *node) {
   // Load as many arguments to the registers as possible.
   for (Node *arg = node->args; arg; arg = arg->next) {
     Type *ty = arg->ty;
+    if(arg != node->args) *argsize += ty->size; // count all but first arg
 
     switch (ty->kind) {
     case TY_STRUCT:
@@ -881,7 +882,8 @@ static void gen_expr(Node *node) {
       return;
     }
 
-    int stack_args = push_args(node);
+    unsigned int argsize = 0;
+    int stack_args = push_args(node, &argsize);
     gen_expr(node->lhs);
 
     int gp = 0, fp = 0;
@@ -931,6 +933,10 @@ static void gen_expr(Node *node) {
     }
 
     println("  mov %%rax, %%r10");
+    if(node->func_ty->is_variadic) {
+        println("  lea __global__argsize__(%%rip), %%rax");
+        println("  movl $%d, (%%rax)", argsize);
+    }
     println("  mov $%d, %%rax", fp);
     println("  call *%%r10");
     println("  add $%d, %%rsp", stack_args * 8);
@@ -1508,6 +1514,7 @@ static void emit_text(Obj *prog) {
       // va_elem
       println("  movl $%d, %d(%%rbp)", gp * 8, off);          // gp_offset
       println("  movl $%d, %d(%%rbp)", fp * 8 + 48, off + 4); // fp_offset
+      off += 8; // Instead of changing all these constants, update off to point where it's supposed to
       println("  movq %%rbp, %d(%%rbp)", off + 8);            // overflow_arg_area
       println("  addq $16, %d(%%rbp)", off + 8);
       println("  movq %%rbp, %d(%%rbp)", off + 16);           // reg_save_area

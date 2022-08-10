@@ -1,9 +1,13 @@
 #ifndef __STDARG_H
 #define __STDARG_H
+unsigned int __global__argsize__ = 0;
+extern void printf(char* fmt, ...);
+extern void exit(int);
 
 typedef struct {
   unsigned int gp_offset;
   unsigned int fp_offset;
+  unsigned int remaining;
   void *overflow_arg_area;
   void *reg_save_area;
 } __va_elem;
@@ -11,7 +15,7 @@ typedef struct {
 typedef __va_elem va_list[1];
 
 #define va_start(ap, last) \
-  do { *(ap) = *(__va_elem *)__va_area__; } while (0)
+  do { *(ap) = *(__va_elem *)__va_area__; ap->remaining = __global__argsize__;} while (0)
 
 #define va_end(ap)
 
@@ -20,6 +24,12 @@ static void *__va_arg_mem(__va_elem *ap, int sz, int align) {
   if (align > 8)
     p = (p + 15) / 16 * 16;
   ap->overflow_arg_area = ((unsigned long)p + sz + 7) / 8 * 8;
+
+  ap->remaining -= sz;
+  if(ap->remaining & 0x80000000) {
+    printf("Program aborting due to variadic overflow!\n");
+    exit(-1);
+  }
   return p;
 }
 
@@ -29,6 +39,11 @@ static void *__va_arg_gp(__va_elem *ap, int sz, int align) {
 
   void *r = ap->reg_save_area + ap->gp_offset;
   ap->gp_offset += 8;
+  ap->remaining -= sz;
+  if(ap->remaining & 0x80000000) {
+    printf("Program aborting due to variadic overflow!\n");
+    exit(-1);
+  }
   return r;
 }
 
@@ -38,6 +53,11 @@ static void *__va_arg_fp(__va_elem *ap, int sz, int align) {
 
   void *r = ap->reg_save_area + ap->fp_offset;
   ap->fp_offset += 8;
+  ap->remaining -= sz;
+  if(ap->remaining & 0x80000000){
+    printf("Program aborting due to variadic overflow!\n");
+    exit(-1);
+  }
   return r;
 }
 

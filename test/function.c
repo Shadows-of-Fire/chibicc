@@ -81,6 +81,7 @@ int add_all(int n, ...);
 typedef struct {
   int gp_offset;
   int fp_offset;
+  unsigned int remaining;
   void *overflow_arg_area;
   void *reg_save_area;
 } __va_elem;
